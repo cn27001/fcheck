@@ -2,7 +2,7 @@ package fcheck
 
 import (
 	"bytes"
-	"crypto/sha1"
+	"crypto/sha512"
 	"encoding/gob"
 	"fmt"
 	"io"
@@ -17,7 +17,7 @@ type FileCheckInfo struct {
 	Size    int64       // length in bytes for regular files; system-dependent for others
 	Mode    os.FileMode // file mode bits
 	ModTime time.Time   // modification time
-	Digest  []byte      //sha1 sum
+	Digest  []byte      // checksum
 }
 
 //FileCheckInfoFromBytes returns new instance of FileCheckInfo after deserializing it from []byte
@@ -29,7 +29,7 @@ func FileCheckInfoFromBytes(data []byte) (*FileCheckInfo, error) {
 	return &fc, err
 }
 
-//CalcDigest performs a SHA1 checksum on a file in question if it's a regular file
+//CalcDigest performs a SHA512 checksum on a file in question if it's a regular file
 func (fc *FileCheckInfo) CalcDigest() error {
 	if !fc.Mode.IsRegular() {
 		return nil
@@ -39,7 +39,7 @@ func (fc *FileCheckInfo) CalcDigest() error {
 		return err
 	}
 	defer file.Close()
-	h := sha1.New()
+	h := sha512.New()
 	if _, err := io.Copy(h, file); err != nil {
 		return err
 	}
