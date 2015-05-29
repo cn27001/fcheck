@@ -1,3 +1,4 @@
 *.swp
-fcheck
-fcheck.db
+cmd/fcheck/fcheck*
+cmd/fcount/fcount
+cmd/fcheck/fcheck.db

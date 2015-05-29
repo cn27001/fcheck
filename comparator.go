@@ -4,81 +4,140 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"runtime"
 )
 
 //Comparator represents a file system walker that checks previously generated db and compares it to a filesystem
 type Comparator struct {
+	FileInfoReader
 	newFiles     []string
 	changedFiles []string
 	removedFiles []string
-	*DB
+	pathWalked   string
+	taskCh       chan *FileCheckInfo
+	quitCh       chan bool
+	doneCh       chan bool
+	changedCh    chan string
+	newCh        chan string
+	numWorkers   int
 }
 
 //NewComparator returns new Comparator instance backed by the DB in dbfname
 func NewComparator(dbfname string) *Comparator {
-	return &Comparator{nil, nil, nil, NewDB(dbfname)}
+	return &Comparator{
+		FileInfoReader: NewDBReader(dbfname),
+		numWorkers:     runtime.NumCPU()}
+}
+
+//Start initializes generator before walking (e.g. start workers, open DB)
+func (rcv *Comparator) Start() error {
+	rcv.taskCh = make(chan *FileCheckInfo)
+	rcv.quitCh = make(chan bool)
+	rcv.doneCh = make(chan bool)
+	rcv.newCh = make(chan string)
+	rcv.changedCh = make(chan string)
+	//start the append routine
+	go func() {
+	FLOOP:
+		for {
+			select {
+			case x := <-rcv.changedCh:
+				rcv.changedFiles = append(rcv.changedFiles, x)
+			case x := <-rcv.newCh:
+				rcv.newFiles = append(rcv.newFiles, x)
+			case <-rcv.doneCh:
+				break FLOOP
+			}
+		}
+		//sync with main by waiting for quit
+		<-rcv.quitCh
+	}()
+	//start the compare workers
+	for i := 0; i < rcv.numWorkers; i++ {
+		go func(n int) {
+			for {
+				select {
+				case fc := <-rcv.taskCh:
+					//log.Printf("worker %d saving %s\n", n, fc.Path)
+					rcv.compareFc(fc)
+				case <-rcv.quitCh:
+					//log.Printf("worker %d quitting\n", n)
+					return
+				}
+			}
+		}(i)
+	}
+	return rcv.FileInfoReader.Start()
+}
+
+func (rcv *Comparator) StartWalking(path string) error {
+	rcv.pathWalked = path
+	return filepath.Walk(path, rcv.Walk)
 }
 
 //Walk is the implemention of filepath.WalkFunc meant to be passed to filepath.Walk
 func (rcv *Comparator) Walk(path string, info os.FileInfo, err error) error {
-	if err != nil {
-		log.Printf("Received error in Walk: %s", err.Error())
-		return err
-	}
 	fc := &FileCheckInfo{
-		Path:    path,
-		Name:    info.Name(),
-		Size:    info.Size(),
-		Mode:    info.Mode(),
-		ModTime: info.ModTime(),
+		Path: path,
 	}
-	return rcv.compareFc(fc)
+	if err != nil {
+		log.Print(err)
+		if os.IsNotExist(err) {
+			return nil
+		}
+	} else {
+		fc.Size = info.Size()
+		fc.Mode = info.Mode()
+		fc.ModTime = info.ModTime()
+	}
+	rcv.taskCh <- fc
+	return nil
 }
 
-func (rcv *Comparator) compareFc(fc *FileCheckInfo) error {
-	key := fc.Key()
-	val, err := rcv.Get(key)
-	if err != nil {
-		log.Printf("Touble with Get(key) %s\n", err.Error())
-		return err
+func (rcv *Comparator) compareFc(fc *FileCheckInfo) {
+	old, err := rcv.Get(fc.Path)
+	if err == NotFoundErr {
+		old = nil
+	} else if err != nil {
+		log.Fatalf("Trouble with Get(\"%s\") %s\n", fc.Path, err.Error())
 	}
-	if val == nil {
+	if old == nil {
 		//ok does not exist in db stop right here
-		rcv.newFiles = append(rcv.newFiles, fc.Path)
-		return nil
+		rcv.newCh <- fc.Path
+		return
 	}
-	old, err := FileCheckInfoFromBytes(val)
-	if err != nil {
-		log.Printf("Touble with FileCheckInfoFromBytes: %s\n", err.Error())
-		return err
-	}
-	if err := fc.CalcDigest(); err != nil {
-		log.Printf("Trouble with CalcDigest: %s\n", err.Error())
-		return err
+	//to save time only calc digest if not obviously different
+	if fc.LiteMatch(old) {
+		if err := fc.CalcDigest(); err != nil {
+			log.Printf("Trouble calculating digest: %s\n", err.Error())
+		}
 	}
 	if !fc.Match(old) {
-		rcv.changedFiles = append(rcv.changedFiles, fc.Path)
+		rcv.changedCh <- fc.Path
 	}
-	return err
 }
 
 //Stop is a wrapper around underlying DB.Stop that also prints the final report of comparison
 func (rcv *Comparator) Stop() error {
-	defer rcv.DB.Stop()
+	defer rcv.FileInfoReader.Stop()
+	//wait for compare tasks to finish
+	for i := 0; i < rcv.numWorkers; i++ {
+		rcv.quitCh <- true
+	}
+	close(rcv.doneCh)
+	//this one is for the appender routine
+	rcv.quitCh <- true
 	//find the deleted files
-	var maperror error
-	rcv.Map(func(key, val []byte) {
-		if maperror != nil {
-			return //noop
-		}
-		fc, err := FileCheckInfoFromBytes(val)
-		if err != nil {
-			maperror = err
-			return
-		}
+	maperror := rcv.Map(rcv.pathWalked, func(fc *FileCheckInfo) error {
 		if _, perr := os.Lstat(fc.Path); perr != nil {
-			rcv.removedFiles = append(rcv.removedFiles, fc.Path)
+			if os.IsNotExist(perr) {
+				rcv.removedFiles = append(rcv.removedFiles, fc.Path)
+			} else {
+				log.Printf("Error in Map step: %s", perr)
+			}
 		}
+		return nil
 	})
 	if maperror != nil {
 		log.Printf("Error in Map: %s", maperror.Error())
