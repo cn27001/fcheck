@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -202,6 +203,9 @@ func (r *DBReader) Map(path string, f DBMapFunc) error {
 		var fc FileCheckInfo
 		if err := decode(fi, &fc); err != nil {
 			break
+		}
+		if !strings.HasPrefix(fc.Path, path) {
+			continue
 		}
 		f(&fc)
 		curPos, err := fi.Seek(0, os.SEEK_CUR)
