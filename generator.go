@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 //Generator represents a file system walker that generates meta db of files it sees on the system
@@ -13,6 +14,7 @@ type Generator struct {
 	taskCh    chan *FileCheckInfo
 	quitCh    chan bool
 	FileInfoWriter
+	excludes []string
 }
 
 //NewGenerator returns new Generator instance backed by the DB in dbfname
@@ -20,15 +22,25 @@ func NewGenerator(dbfname string) *Generator {
 	if err := os.Remove(dbfname); err != nil {
 		log.Printf("Trouble removing old db file %s: %s\n", dbfname, err)
 	}
-	return &Generator{runtime.NumCPU(), nil, nil, NewDBWriter(dbfname)}
+	return &Generator{
+		numWorker:      runtime.NumCPU(),
+		FileInfoWriter: NewDBWriter(dbfname)}
 }
 
-func (rcv *Generator) StartWalking(path string) error {
-	return filepath.Walk(path, rcv.Walk)
+//StartWalking starts the actual walking of the filesystem to generate the DB
+func (g *Generator) StartWalking(path string, exclude StringSet) error {
+	g.excludes = exclude.Items()
+	return filepath.Walk(path, g.Walk)
 }
 
 //Walk is the implemention of filepath.WalkFunc meant to be passed to filepath.Walk
 func (g *Generator) Walk(path string, info os.FileInfo, err error) error {
+	for _, v := range g.excludes {
+		if strings.HasPrefix(path, v) {
+			//path is excluded
+			return nil
+		}
+	}
 	if err != nil {
 		log.Printf("Trouble in Generator.Walk: %s\n", err)
 		return nil

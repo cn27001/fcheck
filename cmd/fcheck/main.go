@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"log"
+	"os"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/jlabath/fcheck"
 )
@@ -20,6 +23,7 @@ func main() {
 		pathPtr    = flag.String("path", "/", "path to check/generate db for")
 		showPtr    = flag.Bool("show", false, "show entries that start with provided path")
 		cpuPtr     = flag.String("numcpu", "auto", "How many system threads can be executed at the time; default is number of CPUs")
+		excludePtr = flag.String("exclude_from", "excludes.txt", "File which contains path prefixes to ignore")
 		walker     fcheck.Walker
 	)
 
@@ -49,5 +53,23 @@ func main() {
 		log.Println("finished")
 	}()
 	defer walker.Stop()
-	walker.StartWalking(*pathPtr)
+	walker.StartWalking(*pathPtr, makeExcludeList(*excludePtr))
+}
+
+func makeExcludeList(path string) (e fcheck.StringSet) {
+	e = make(fcheck.StringSet)
+	if path == "" {
+		return
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		e.Add(strings.TrimSpace(scanner.Text()))
+	}
+	return
 }

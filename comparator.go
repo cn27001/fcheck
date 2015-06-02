@@ -2,10 +2,12 @@ package fcheck
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 //Comparator represents a file system walker that checks previously generated db and compares it to a filesystem
@@ -21,13 +23,16 @@ type Comparator struct {
 	changedCh    chan string
 	newCh        chan string
 	numWorkers   int
+	console      io.Writer
+	excludes     []string
 }
 
 //NewComparator returns new Comparator instance backed by the DB in dbfname
 func NewComparator(dbfname string) *Comparator {
 	return &Comparator{
 		FileInfoReader: NewDBReader(dbfname),
-		numWorkers:     runtime.NumCPU()}
+		numWorkers:     runtime.NumCPU(),
+		console:        os.Stdout}
 }
 
 //Start initializes generator before walking (e.g. start workers, open DB)
@@ -71,13 +76,21 @@ func (rcv *Comparator) Start() error {
 	return rcv.FileInfoReader.Start()
 }
 
-func (rcv *Comparator) StartWalking(path string) error {
+//StartWalking will start the actual filesystem walking and comparison with DB
+func (rcv *Comparator) StartWalking(path string, exclude StringSet) error {
 	rcv.pathWalked = path
+	rcv.excludes = exclude.Items()
 	return filepath.Walk(path, rcv.Walk)
 }
 
 //Walk is the implemention of filepath.WalkFunc meant to be passed to filepath.Walk
 func (rcv *Comparator) Walk(path string, info os.FileInfo, err error) error {
+	for _, v := range rcv.excludes {
+		if strings.HasPrefix(path, v) {
+			//path is excluded
+			return nil
+		}
+	}
 	fc := &FileCheckInfo{
 		Path: path,
 	}
@@ -130,6 +143,12 @@ func (rcv *Comparator) Stop() error {
 	rcv.quitCh <- true
 	//find the deleted files
 	maperror := rcv.Map(rcv.pathWalked, func(fc *FileCheckInfo) error {
+		for _, v := range rcv.excludes {
+			if strings.HasPrefix(fc.Path, v) {
+				//path is excluded
+				return nil
+			}
+		}
 		if _, perr := os.Lstat(fc.Path); perr != nil {
 			if os.IsNotExist(perr) {
 				rcv.removedFiles = append(rcv.removedFiles, fc.Path)
@@ -144,17 +163,17 @@ func (rcv *Comparator) Stop() error {
 		return maperror
 	}
 	//Print the report
-	fmt.Printf("Changed files %d\n", len(rcv.changedFiles))
+	fmt.Fprintf(rcv.console, "\n\nChanged files %d\n\n", len(rcv.changedFiles))
 	for _, v := range rcv.changedFiles {
-		fmt.Println(v)
+		fmt.Fprintln(rcv.console, v)
 	}
-	fmt.Printf("New files %d\n", len(rcv.newFiles))
+	fmt.Fprintf(rcv.console, "\n\nNew files %d\n\n", len(rcv.newFiles))
 	for _, v := range rcv.newFiles {
-		fmt.Println(v)
+		fmt.Fprintln(rcv.console, v)
 	}
-	fmt.Printf("Deleted files %d\n", len(rcv.removedFiles))
+	fmt.Fprintf(rcv.console, "\n\nDeleted files %d\n\n", len(rcv.removedFiles))
 	for _, v := range rcv.removedFiles {
-		fmt.Println(v)
+		fmt.Fprintln(rcv.console, v)
 	}
 	return nil
 }

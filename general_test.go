@@ -1,6 +1,9 @@
 package fcheck
 
 import (
+	"bufio"
+	"bytes"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -11,72 +14,108 @@ var (
 )
 
 func TestGenerator(t *testing.T) {
-	g := NewGenerator(testDBName)
+	var g Walker = NewGenerator(testDBName)
+	exclude := make(StringSet)
 	err := g.Start()
 	ok(t, err)
-	err = g.StartWalking(testPath)
+	err = g.StartWalking(testPath, exclude)
 	ok(t, err)
 	err = g.Stop()
 	ok(t, err)
 }
 
 func TestPrinter(t *testing.T) {
-	p := NewPrinter(testDBName)
+	var p Walker = NewPrinter(testDBName)
+	exclude := make(StringSet)
+	exclude.Add("/bin/ps")
+	var buf bytes.Buffer
 	err := p.Start()
 	ok(t, err)
-	err = p.StartWalking(testPath)
+	rawp := p.(*Printer)
+	rawp.console = &buf
+	err = p.StartWalking(testPath, exclude)
 	ok(t, err)
 	err = p.Stop()
 	ok(t, err)
+	//examine buffer
+	foundLS := false
+	foundPS := false
+	scanner := bufio.NewScanner(&buf)
+	for scanner.Scan() {
+		if strings.Index(scanner.Text(), "/bin/ls") > -1 {
+			foundLS = true
+		}
+		if strings.Index(scanner.Text(), "/bin/ps") > -1 {
+			foundPS = true
+		}
+	}
+	assert(t, foundLS, "expected to found /bin/ls")
+	assert(t, foundPS == false, "expected to NOT found /bin/ps")
 }
 
 func TestComparator(t *testing.T) {
-	cm := NewComparator(testDBName)
+	var cm Walker = NewComparator(testDBName)
+	rawcm := cm.(*Comparator)
+	var buf bytes.Buffer
+	rawcm.console = &buf
+	exclude := make(StringSet)
 	err := cm.Start()
 	ok(t, err)
-	err = cm.StartWalking(testPath)
+	err = cm.StartWalking(testPath, exclude)
 	ok(t, err)
 	err = cm.Stop()
 	ok(t, err)
-	equals(t, 0, len(cm.newFiles))
-	equals(t, 0, len(cm.changedFiles))
-	equals(t, 0, len(cm.removedFiles))
+	equals(t, 0, len(rawcm.newFiles))
+	equals(t, 0, len(rawcm.changedFiles))
+	equals(t, 0, len(rawcm.removedFiles))
 }
 
 func TestComparatorNoPath(t *testing.T) {
-	cm := NewComparator(testDBName)
+	var cm Walker = NewComparator(testDBName)
+	rawcm := cm.(*Comparator)
+	var buf bytes.Buffer
+	rawcm.console = &buf
+	exclude := make(StringSet)
 	err := cm.Start()
 	ok(t, err)
 	//non-exist path
-	err = cm.StartWalking("/foobardubar23256646")
+	err = cm.StartWalking("/foobardubar23256646", exclude)
 	ok(t, err)
 	err = cm.Stop()
 	ok(t, err)
-	equals(t, 0, len(cm.newFiles))
-	equals(t, 0, len(cm.changedFiles))
-	equals(t, 0, len(cm.removedFiles))
+	equals(t, 0, len(rawcm.newFiles))
+	equals(t, 0, len(rawcm.changedFiles))
+	equals(t, 0, len(rawcm.removedFiles))
 }
 
 func TestComparatorNoPathInDB(t *testing.T) {
-	cm := NewComparator(testDBName)
+	var cm Walker = NewComparator(testDBName)
+	rawcm := cm.(*Comparator)
+	var buf bytes.Buffer
+	rawcm.console = &buf
+	exclude := make(StringSet)
 	err := cm.Start()
 	ok(t, err)
 	//permission errors as ordinary user plus new files
-	err = cm.StartWalking("/etc")
+	err = cm.StartWalking("/etc", exclude)
 	ok(t, err)
 	err = cm.Stop()
 	ok(t, err)
-	assert(t, len(cm.newFiles) > 0, "expected to be all new files in /etc")
-	equals(t, 0, len(cm.changedFiles))
-	equals(t, 0, len(cm.removedFiles))
+	assert(t, len(rawcm.newFiles) > 0, "expected to be all new files in /etc")
+	equals(t, 0, len(rawcm.changedFiles))
+	equals(t, 0, len(rawcm.removedFiles))
 }
 
 func TestPrinterNoPath(t *testing.T) {
-	cm := NewPrinter(testDBName)
+	var cm Walker = NewPrinter(testDBName)
+	exclude := make(StringSet)
+	rawcm := cm.(*Printer)
+	var buf bytes.Buffer
+	rawcm.console = &buf
 	err := cm.Start()
 	ok(t, err)
 	//non-exist path
-	err = cm.StartWalking("/foobardubar23256646")
+	err = cm.StartWalking("/foobardubar23256646", exclude)
 	ok(t, err)
 	err = cm.Stop()
 	ok(t, err)
