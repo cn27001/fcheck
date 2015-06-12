@@ -58,7 +58,7 @@ func (r *DBWriter) Stop() error {
 	return r.index.Save(f)
 }
 
-//Set puts an entry in the datastore
+//Put puts an entry in the datastore
 func (r *DBWriter) Put(fc *FileCheckInfo) error {
 	r.wChan <- fc
 	return nil
@@ -104,13 +104,13 @@ func decode(in io.Reader, m encoding.BinaryUnmarshaler) error {
 	if n, err := in.Read(buf); n != len(buf) {
 		if err != nil {
 			return err
-		} else {
-			return fmt.Errorf("Expected to read %d bytes but read %d", blen, n)
 		}
+		return fmt.Errorf("Expected to read %d bytes but read %d", blen, n)
 	}
 	return m.UnmarshalBinary(buf)
 }
 
+//DBReader is a simple implementation of FileInfoReader
 type DBReader struct {
 	dbfile string
 	index  *PathIndex
@@ -118,7 +118,8 @@ type DBReader struct {
 	l      sync.Mutex
 }
 
-var NotFoundErr = errors.New("not found")
+//ErrNotFound signifies that such FileCheckInfo entry could not be find
+var ErrNotFound = errors.New("not found")
 
 //NewDBReader returns new instance of DBReader
 func NewDBReader(dbfname string) *DBReader {
@@ -147,12 +148,12 @@ func (r *DBReader) Stop() error {
 	return r.db.Close()
 }
 
-//Set puts an entry in the datastore
+//Get retrieves an entry from db
 func (r *DBReader) Get(key string) (*FileCheckInfo, error) {
 	//index reading can be concurrent
 	offset, ok := r.index.Get(key)
 	if !ok {
-		return nil, NotFoundErr
+		return nil, ErrNotFound
 	}
 	//lock db file
 	r.l.Lock()
@@ -171,6 +172,7 @@ func (r *DBReader) Get(key string) (*FileCheckInfo, error) {
 	return &fc, err
 }
 
+//Map maps FileCheckInfo entries in db whose paths match path to DBMapFunc f
 func (r *DBReader) Map(path string, f DBMapFunc) error {
 	fi, err := os.Open(r.dbfile)
 	if err != nil {

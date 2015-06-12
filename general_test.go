@@ -127,7 +127,7 @@ func TestGet(t *testing.T) {
 	ok(t, err)
 	fi, err := d.Get("/skart/12412415145464634633463464")
 	assert(t, err != nil, "Expected an error")
-	assert(t, err == NotFoundErr, "Expected not found on funny key")
+	assert(t, err == ErrNotFound, "Expected not found on funny key")
 	//assume /bin/ls exists !
 	p := "/bin/ls"
 	fi, err = d.Get(p)

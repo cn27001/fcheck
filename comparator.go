@@ -110,7 +110,7 @@ func (rcv *Comparator) Walk(path string, info os.FileInfo, err error) error {
 
 func (rcv *Comparator) compareFc(fc *FileCheckInfo) {
 	old, err := rcv.Get(fc.Path)
-	if err == NotFoundErr {
+	if err == ErrNotFound {
 		old = nil
 	} else if err != nil {
 		log.Fatalf("Trouble with Get(\"%s\") %s\n", fc.Path, err.Error())

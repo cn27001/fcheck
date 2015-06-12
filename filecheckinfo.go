@@ -51,6 +51,7 @@ func (fc *FileCheckInfo) HexDigest() string {
 	return fmt.Sprintf("%x", fc.Digest)
 }
 
+//MarshalBinary implements encoding/binary Marshaller
 func (fc *FileCheckInfo) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 	bw := &binaryWriter{}
@@ -78,6 +79,7 @@ func (fc *FileCheckInfo) MarshalBinary() ([]byte, error) {
 	return buf.Bytes(), bw.Err()
 }
 
+//UnmarshalBinary emplements encoding/binary Unmarshaller
 func (fc *FileCheckInfo) UnmarshalBinary(data []byte) error {
 	var blen uint16
 	var pos, nextpos int
@@ -114,6 +116,7 @@ func (fc *FileCheckInfo) UnmarshalBinary(data []byte) error {
 	return br.Err()
 }
 
+//LiteMatch is identical to match except it does not compare the digest checksum
 func (fc *FileCheckInfo) LiteMatch(ot *FileCheckInfo) bool {
 	if ot.Mode != fc.Mode {
 		return false
@@ -127,7 +130,7 @@ func (fc *FileCheckInfo) LiteMatch(ot *FileCheckInfo) bool {
 }
 
 //Match returns true if this instance of FileCheckInfo equals the Other
-//that is both the os.FileMode and (checksum if applicable have to much)
+//that is both the os.FileMode and (checksum if applicable have to match)
 func (fc *FileCheckInfo) Match(ot *FileCheckInfo) bool {
 	ok := fc.LiteMatch(ot)
 	if ok {

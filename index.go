@@ -12,14 +12,17 @@ func splitPath(path string) []string {
 	return strings.Split(filepath.Clean(path), string(filepath.Separator))
 }
 
+//PathIndex holds our path index structure
 type PathIndex struct {
 	root *PEntry
 }
 
+//NewPathIndex returns new instance of PathIndex
 func NewPathIndex() *PathIndex {
 	return &PathIndex{NewPEntry()}
 }
 
+//Get returns the value from PathIndex stored under key k
 func (pi *PathIndex) Get(k string) (int64, bool) {
 	var node *PEntry
 	var ok bool
@@ -30,6 +33,7 @@ func (pi *PathIndex) Get(k string) (int64, bool) {
 	return node.Pos, ok
 }
 
+//GetNode returns the PEntry from PathIndex stored under key k
 func (pi *PathIndex) GetNode(k string) (*PEntry, bool) {
 	pathParts := splitPath(k)
 	if len(pathParts) == 1 {
@@ -41,6 +45,7 @@ func (pi *PathIndex) GetNode(k string) (*PEntry, bool) {
 	return nil, false
 }
 
+//Set sets value to v under key k, creating any parent entries in the process as needed
 func (pi *PathIndex) Set(k string, v int64) {
 	//if not slash return error ?
 	pathParts := splitPath(k)
@@ -52,11 +57,13 @@ func (pi *PathIndex) Set(k string, v int64) {
 	pe.Pos = v
 }
 
+//Save stores the PathIndex to disk
 func (pi *PathIndex) Save(f io.Writer) error {
 	enc := gob.NewEncoder(f)
 	return enc.Encode(pi.root)
 }
 
+//Load re-stores the PathIndex from disk
 func (pi *PathIndex) Load(f io.Reader) error {
 	dec := gob.NewDecoder(f)
 	pe := NewPEntry()
@@ -67,18 +74,21 @@ func (pi *PathIndex) Load(f io.Reader) error {
 	return nil
 }
 
+//Size returns the number of entries in PathIndex
 func (pi *PathIndex) Size() int64 {
 	return pi.root.size()
 }
 
 type nodeStepF func(node *PEntry)
 
+//PEntry represents actual path index entry
 type PEntry struct {
 	Name     string
 	Pos      int64
 	Children []*PEntry
 }
 
+//NewPEntry returns a new PEntry instance
 func NewPEntry() *PEntry {
 	return &PEntry{"", -1, nil}
 }
@@ -101,18 +111,18 @@ func (pe *PEntry) getOrCreate(parts []string) *PEntry {
 	}
 	head := parts[0]
 	tail := parts[1:]
-	if idx, exists := pe.idxChild(head); exists {
+	idx, exists := pe.idxChild(head)
+	if exists {
 		if len(tail) == 0 {
 			return pe.Children[idx]
 		}
 		return pe.Children[idx].getOrCreate(tail)
-	} else {
-		ch := pe.addChild(idx, head)
-		if len(tail) == 0 {
-			return ch
-		}
-		return ch.getOrCreate(tail)
 	}
+	ch := pe.addChild(idx, head)
+	if len(tail) == 0 {
+		return ch
+	}
+	return ch.getOrCreate(tail)
 }
 
 func (pe *PEntry) idxChild(childName string) (int, bool) {
@@ -146,6 +156,7 @@ func (pe *PEntry) size() int64 {
 	return n
 }
 
+//Traverse will travers the PEntry tree and call f on each entry
 func (pe *PEntry) Traverse(f nodeStepF) {
 	f(pe)
 	for _, v := range pe.Children {
