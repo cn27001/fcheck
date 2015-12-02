@@ -14,7 +14,7 @@ var (
 )
 
 func TestGenerator(t *testing.T) {
-	var g Walker = NewGenerator(testDBName)
+	var g Walker = NewGenerator(testDBName, 2, false)
 	exclude := make(StringSet)
 	err := g.Start()
 	ok(t, err)
@@ -54,7 +54,7 @@ func TestPrinter(t *testing.T) {
 }
 
 func TestComparator(t *testing.T) {
-	var cm Walker = NewComparator(testDBName)
+	var cm Walker = NewComparator(testDBName, 2, false)
 	rawcm := cm.(*Comparator)
 	var buf bytes.Buffer
 	rawcm.console = &buf
@@ -71,7 +71,7 @@ func TestComparator(t *testing.T) {
 }
 
 func TestComparatorNoPath(t *testing.T) {
-	var cm Walker = NewComparator(testDBName)
+	var cm Walker = NewComparator(testDBName, 2, false)
 	rawcm := cm.(*Comparator)
 	var buf bytes.Buffer
 	rawcm.console = &buf
@@ -89,7 +89,7 @@ func TestComparatorNoPath(t *testing.T) {
 }
 
 func TestComparatorNoPathInDB(t *testing.T) {
-	var cm Walker = NewComparator(testDBName)
+	var cm Walker = NewComparator(testDBName, 2, false)
 	rawcm := cm.(*Comparator)
 	var buf bytes.Buffer
 	rawcm.console = &buf

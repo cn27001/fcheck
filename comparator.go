@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -25,14 +24,16 @@ type Comparator struct {
 	numWorkers   int
 	console      io.Writer
 	excludes     []string
+	verbose      bool
 }
 
 //NewComparator returns new Comparator instance backed by the DB in dbfname
-func NewComparator(dbfname string) *Comparator {
+func NewComparator(dbfname string, num int, verbose bool) *Comparator {
 	return &Comparator{
 		FileInfoReader: NewDBReader(dbfname),
-		numWorkers:     runtime.NumCPU(),
-		console:        os.Stdout}
+		numWorkers:     num,
+		console:        os.Stdout,
+		verbose:        verbose}
 }
 
 //Start initializes generator before walking (e.g. start workers, open DB)
@@ -88,8 +89,14 @@ func (rcv *Comparator) Walk(path string, info os.FileInfo, err error) error {
 	for _, v := range rcv.excludes {
 		if strings.HasPrefix(path, v) {
 			//path is excluded
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
+	}
+	if rcv.verbose && info.IsDir() {
+		fmt.Fprintf(rcv.console, "Entering %s\n", path)
 	}
 	fc := &FileCheckInfo{
 		Path: path,

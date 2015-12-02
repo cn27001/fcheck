@@ -29,7 +29,7 @@ func (r *Printer) StartWalking(path string, exclude StringSet) error {
 				return nil
 			}
 		}
-		fmt.Fprintf(r.console, "%s\t%s\t%s\t%s\n", fc.Mode.String(), fc.ModTime.Format(layout), fc.HexDigest(), fc.Path)
+		fmt.Fprintf(r.console, "%s %s %s %s\n", fc.Mode.String(), fc.ModTime.Format(layout), fc.HexDigest(), fc.Path)
 		return nil
 	})
 }

@@ -1,6 +1,7 @@
 package fcheck
 
 import (
+	"bufio"
 	"encoding"
 	"encoding/binary"
 	"errors"
@@ -11,6 +12,9 @@ import (
 	"strings"
 	"sync"
 )
+
+//BufferSize default size of I/O buffers
+const BufferSize = 512 * 1024
 
 //DBWriter represents the underlying datastore that stores the actual filesystem entries
 type DBWriter struct {
@@ -73,7 +77,9 @@ func (r *DBWriter) writer() {
 				log.Fatal(err)
 			}
 			r.index.Set(fc.Path, curPos)
-			encode(r.fout, fc)
+			if err := encode(r.fout, fc); err != nil {
+				log.Print("trouble writing to db file: ", err.Error())
+			}
 		case <-r.quitChan:
 			return
 		}
@@ -179,44 +185,20 @@ func (r *DBReader) Map(path string, f DBMapFunc) error {
 		return err
 	}
 	defer fi.Close()
-	//ok traverse index to get min and max offset of records in db file
-	var (
-		maxPos, minPos int64
-		node           *PEntry
-		ok             bool
-	)
-	node, ok = r.index.GetNode(path)
-	if !ok {
-		return nil //error if not found ?
-	}
-	node.Traverse(func(x *PEntry) {
-		if x.Pos < minPos {
-			minPos = x.Pos
-		}
-		if x.Pos > maxPos {
-			maxPos = x.Pos
-		}
-	})
-	//seek to min pos
-	if _, serr := fi.Seek(minPos, os.SEEK_SET); serr != nil {
-		return serr
-	}
+	bif := bufio.NewReaderSize(fi, BufferSize)
 	for {
 		var fc FileCheckInfo
-		if err := decode(fi, &fc); err != nil {
+		if err = decode(bif, &fc); err != nil {
+			if err != io.EOF {
+				log.Print("trouble calling decode:", err)
+				return err
+			}
 			break
 		}
 		if !strings.HasPrefix(fc.Path, path) {
 			continue
 		}
 		f(&fc)
-		curPos, err := fi.Seek(0, os.SEEK_CUR)
-		if err != nil {
-			break
-		}
-		if maxPos > 0 && maxPos < curPos {
-			break
-		}
 	}
-	return err
+	return nil
 }

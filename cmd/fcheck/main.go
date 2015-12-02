@@ -14,7 +14,7 @@ import (
 
 const (
 	dbfile  = "fcheck.db"
-	version = "0.1 (May 2015)"
+	version = "0.2 (Nov 2015)"
 )
 
 func main() {
@@ -22,29 +22,27 @@ func main() {
 		generateDB = flag.Bool("gendb", false, "generates the db")
 		pathPtr    = flag.String("path", "/", "path to check/generate db for")
 		showPtr    = flag.Bool("show", false, "show entries that start with provided path")
-		cpuPtr     = flag.String("numcpu", "auto", "How many system threads can be executed at the time; default is number of CPUs")
+		cpuPtr     = flag.String("num", "runtime.NumCPU()", "How many goroutines to run when computing checksums")
 		excludePtr = flag.String("exclude_from", "excludes.txt", "File which contains path prefixes to ignore")
+		verbosePtr = flag.Bool("v", false, "verbose mode")
 		walker     fcheck.Walker
 	)
 
 	flag.Parse()
 
-	//how many concurrent system threads to run
-	numCPU := runtime.NumCPU()
 	askedCPU, err := strconv.Atoi(*cpuPtr)
-	if err != nil || askedCPU > numCPU || askedCPU < 1 {
-		askedCPU = numCPU
+	if err != nil || askedCPU < 1 {
+		askedCPU = runtime.NumCPU()
 	}
-	runtime.GOMAXPROCS(askedCPU)
 
 	log.Printf("fcheck %s\n", version)
 	switch {
 	case *showPtr:
 		walker = fcheck.NewPrinter(dbfile)
 	case *generateDB:
-		walker = fcheck.NewGenerator(dbfile)
+		walker = fcheck.NewGenerator(dbfile, askedCPU, *verbosePtr)
 	default:
-		walker = fcheck.NewComparator(dbfile)
+		walker = fcheck.NewComparator(dbfile, askedCPU, *verbosePtr)
 	}
 	if err := walker.Start(); err != nil {
 		log.Fatalf("Unable to start fs walker due to %s", err.Error())
