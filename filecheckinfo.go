@@ -131,10 +131,11 @@ func (fc *FileCheckInfo) LiteMatch(ot *FileCheckInfo) bool {
 
 //Match returns true if this instance of FileCheckInfo equals the Other
 //that is both the os.FileMode and (checksum if applicable have to match)
+//do not do cheksum comparison on non regular files
 func (fc *FileCheckInfo) Match(ot *FileCheckInfo) bool {
 	ok := fc.LiteMatch(ot)
-	if ok {
-		return ot.HexDigest() == fc.HexDigest()
+	if ok && fc.Mode.IsRegular() {
+		return bytes.Equal(fc.Digest, ot.Digest)
 	}
 	return ok
 }
