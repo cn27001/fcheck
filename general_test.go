@@ -5,7 +5,8 @@ import (
 	"bytes"
 	"strings"
 	"sync"
-	"testing"
+
+	. "gopkg.in/check.v1"
 )
 
 var (
@@ -13,30 +14,34 @@ var (
 	testPath   string = "/bin"
 )
 
-func TestGenerator(t *testing.T) {
+type TestSuite struct{}
+
+var _ = Suite(&TestSuite{})
+
+func (s *TestSuite) TestGenerator(c *C) {
 	var g Walker = NewGenerator(testDBName, 2, false)
 	exclude := make(StringSet)
 	err := g.Start()
-	ok(t, err)
+	c.Assert(err, IsNil)
 	err = g.StartWalking(testPath, exclude)
-	ok(t, err)
+	c.Assert(err, IsNil)
 	err = g.Stop()
-	ok(t, err)
+	c.Assert(err, IsNil)
 }
 
-func TestPrinter(t *testing.T) {
+func (s *TestSuite) TestPrinter(c *C) {
 	var p Walker = NewPrinter(testDBName)
 	exclude := make(StringSet)
 	exclude.Add("/bin/ps")
 	var buf bytes.Buffer
 	err := p.Start()
-	ok(t, err)
+	c.Assert(err, IsNil)
 	rawp := p.(*Printer)
 	rawp.console = &buf
 	err = p.StartWalking(testPath, exclude)
-	ok(t, err)
+	c.Assert(err, IsNil)
 	err = p.Stop()
-	ok(t, err)
+	c.Assert(err, IsNil)
 	//examine buffer
 	foundLS := false
 	foundPS := false
@@ -49,90 +54,90 @@ func TestPrinter(t *testing.T) {
 			foundPS = true
 		}
 	}
-	assert(t, foundLS, "expected to found /bin/ls")
-	assert(t, foundPS == false, "expected to NOT found /bin/ps")
+	c.Assert(foundLS, Equals, true)  //"expected to found /bin/ls")
+	c.Assert(foundPS, Equals, false) //"expected to NOT found /bin/ps")
 }
 
-func TestComparator(t *testing.T) {
+func (s *TestSuite) TestComparator(c *C) {
 	var cm Walker = NewComparator(testDBName, 2, false)
 	rawcm := cm.(*Comparator)
 	var buf bytes.Buffer
 	rawcm.console = &buf
 	exclude := make(StringSet)
 	err := cm.Start()
-	ok(t, err)
+	c.Assert(err, IsNil)
 	err = cm.StartWalking(testPath, exclude)
-	ok(t, err)
+	c.Assert(err, IsNil)
 	err = cm.Stop()
-	ok(t, err)
-	equals(t, 0, len(rawcm.newFiles))
-	equals(t, 0, len(rawcm.changedFiles))
-	equals(t, 0, len(rawcm.removedFiles))
+	c.Assert(err, IsNil)
+	c.Assert(rawcm.newFiles, HasLen, 0)
+	c.Assert(rawcm.changedFiles, HasLen, 0)
+	c.Assert(rawcm.removedFiles, HasLen, 0)
 }
 
-func TestComparatorNoPath(t *testing.T) {
+func (s *TestSuite) TestComparatorNoPath(c *C) {
 	var cm Walker = NewComparator(testDBName, 2, false)
 	rawcm := cm.(*Comparator)
 	var buf bytes.Buffer
 	rawcm.console = &buf
 	exclude := make(StringSet)
 	err := cm.Start()
-	ok(t, err)
+	c.Assert(err, IsNil)
 	//non-exist path
 	err = cm.StartWalking("/foobardubar23256646", exclude)
-	ok(t, err)
+	c.Assert(err, IsNil)
 	err = cm.Stop()
-	ok(t, err)
-	equals(t, 0, len(rawcm.newFiles))
-	equals(t, 0, len(rawcm.changedFiles))
-	equals(t, 0, len(rawcm.removedFiles))
+	c.Assert(err, IsNil)
+	c.Assert(rawcm.newFiles, HasLen, 0)
+	c.Assert(rawcm.changedFiles, HasLen, 0)
+	c.Assert(rawcm.removedFiles, HasLen, 0)
 }
 
-func TestComparatorNoPathInDB(t *testing.T) {
+func (s *TestSuite) TestComparatorNoPathInDB(c *C) {
 	var cm Walker = NewComparator(testDBName, 2, false)
 	rawcm := cm.(*Comparator)
 	var buf bytes.Buffer
 	rawcm.console = &buf
 	exclude := make(StringSet)
 	err := cm.Start()
-	ok(t, err)
+	c.Assert(err, IsNil)
 	//permission errors as ordinary user plus new files
 	err = cm.StartWalking("/etc", exclude)
-	ok(t, err)
+	c.Assert(err, IsNil)
 	err = cm.Stop()
-	ok(t, err)
-	assert(t, len(rawcm.newFiles) > 0, "expected to be all new files in /etc")
-	equals(t, 0, len(rawcm.changedFiles))
-	equals(t, 0, len(rawcm.removedFiles))
+	c.Assert(err, IsNil)
+	c.Assert(len(rawcm.newFiles) > 0, Equals, true) // "expected to be all new files in /etc")
+	c.Assert(rawcm.changedFiles, HasLen, 0)
+	c.Assert(rawcm.removedFiles, HasLen, 0)
 }
 
-func TestPrinterNoPath(t *testing.T) {
+func (s *TestSuite) TestPrinterNoPath(c *C) {
 	var cm Walker = NewPrinter(testDBName)
 	exclude := make(StringSet)
 	rawcm := cm.(*Printer)
 	var buf bytes.Buffer
 	rawcm.console = &buf
 	err := cm.Start()
-	ok(t, err)
+	c.Assert(err, IsNil)
 	//non-exist path
 	err = cm.StartWalking("/foobardubar23256646", exclude)
-	ok(t, err)
+	c.Assert(err, IsNil)
 	err = cm.Stop()
-	ok(t, err)
+	c.Assert(err, IsNil)
 }
 
-func TestGet(t *testing.T) {
+func (s *TestSuite) TestGet(c *C) {
 	d := NewDBReader(testDBName)
 	err := d.Start()
-	ok(t, err)
+	c.Assert(err, IsNil)
 	fi, err := d.Get("/skart/12412415145464634633463464")
-	assert(t, err != nil, "Expected an error")
-	assert(t, err == ErrNotFound, "Expected not found on funny key")
+	c.Assert(err, NotNil)
+	c.Assert(err, Equals, ErrNotFound)
 	//assume /bin/ls exists !
 	p := "/bin/ls"
 	fi, err = d.Get(p)
-	ok(t, err)
-	assert(t, fi != nil, "expect fi not nil")
+	c.Assert(err, IsNil)
+	c.Assert(fi, NotNil)
 	//many concurrent gets
 	var wg sync.WaitGroup
 	mgf := func(even bool) {
@@ -142,9 +147,9 @@ func TestGet(t *testing.T) {
 		}
 		for i := 0; i < 1000; i++ {
 			fi, err := d.Get(p)
-			ok(t, err)
-			assert(t, fi != nil, "expect fi not nil")
-			equals(t, fi.Path, p)
+			c.Assert(err, IsNil)
+			c.Assert(fi, NotNil)
+			c.Assert(p, Equals, fi.Path)
 		}
 		wg.Done()
 	}
@@ -155,5 +160,5 @@ func TestGet(t *testing.T) {
 	}
 	wg.Wait()
 	err = d.Stop()
-	ok(t, err)
+	c.Assert(err, IsNil)
 }

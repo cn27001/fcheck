@@ -2,72 +2,77 @@ package fcheck
 
 import (
 	"bytes"
-	"testing"
+	. "gopkg.in/check.v1"
 )
 
-func TestPathSplit(t *testing.T) {
+type IndexSuite struct{}
+
+var _ = Suite(&IndexSuite{})
+
+func (s *IndexSuite) TestPathSplit(c *C) {
 	parts := splitPath("bar")
-	equals(t, len(parts), 1)
-	equals(t, parts[0], "bar")
+	c.Assert(parts, HasLen, 1)
+	c.Assert(parts[0], Equals, "bar")
 	parts = splitPath("bar/shoe")
-	equals(t, len(parts), 2)
-	equals(t, parts[1], "shoe")
+	c.Assert(parts, HasLen, 2)
+	c.Assert(parts[1], Equals, "shoe")
 	parts = splitPath("/bar/shoe")
-	equals(t, len(parts), 3)
-	equals(t, "", parts[0])
-	equals(t, "bar", parts[1])
+	c.Assert(parts, HasLen, 3)
+	c.Assert(parts[0], Equals, "")
+	c.Assert(parts[1], Equals, "bar")
 	parts = splitPath("/bar/shoe/")
-	equals(t, len(parts), 3)
-	equals(t, "", parts[0])
-	equals(t, "shoe", parts[2])
+	c.Assert(parts, HasLen, 3)
+	c.Assert(parts[0], Equals, "")
+	c.Assert(parts[1], Equals, "bar")
+	c.Assert(parts[2], Equals, "shoe")
 }
 
-func TestBasic(t *testing.T) {
+func (s *IndexSuite) TestBasic(c *C) {
 	pi := NewPathIndex()
-	equals(t, int64(1), pi.Size())
+	c.Assert(pi.Size(), Equals, int64(1))
 	pi.Set("/foo", 2)
-	equals(t, int64(2), pi.Size())
+	c.Assert(pi.Size(), Equals, int64(2))
 	pi.Set("/bar", 3)
-	equals(t, pi.Size(), int64(3))
+	c.Assert(pi.Size(), Equals, int64(3))
 	pi.Set("/bar/shoe", 4)
-	equals(t, pi.Size(), int64(4))
+	c.Assert(pi.Size(), Equals, int64(4))
 	pi.Set("/bar/shoe/top/up/high/stuff", 11)
-	equals(t, int64(8), pi.Size())
+	c.Assert(pi.Size(), Equals, int64(8))
 	v, getok := pi.Get("/bar")
-	equals(t, getok, true)
-	equals(t, v, int64(3))
-	equals(t, getok, true)
+	c.Assert(getok, Equals, true)
+	c.Assert(v, Equals, int64(3))
 	v, getok = pi.Get("/bar/shoe/top/up/high/stuff")
-	equals(t, v, int64(11))
+	c.Assert(getok, Equals, true)
+	c.Assert(v, Equals, int64(11))
 }
 
-func TestIndexStorage(t *testing.T) {
+func (s *IndexSuite) TestIndexStorage(c *C) {
 	pi := NewPathIndex()
 	pi.Set("/foo", 2)
 	pi.Set("/bar", 3)
-	equals(t, pi.Size(), int64(3))
+	c.Assert(pi.Size(), Equals, int64(3))
 	pi.Set("/bar/shoe", 4)
-	equals(t, pi.Size(), int64(4))
+	c.Assert(pi.Size(), Equals, int64(4))
 	var buf bytes.Buffer
 	pi.Save(&buf)
 	idx := NewPathIndex()
 	err := idx.Load(&buf)
-	ok(t, err)
-	equals(t, idx.Size(), int64(4))
+	c.Assert(err, IsNil)
+	c.Assert(idx.Size(), Equals, int64(4))
 	v, getok := pi.Get("/bar")
-	equals(t, getok, true)
-	equals(t, v, int64(3))
+	c.Assert(getok, Equals, true)
+	c.Assert(v, Equals, int64(3))
 }
 
-func TestIndexDots(t *testing.T) {
+func (s *IndexSuite) TestIndexDots(c *C) {
 	pi := NewPathIndex()
 	pi.Set("/foo", 2)
 	pi.Set("/foo/bar.txt", 33)
-	equals(t, pi.Size(), int64(3))
+	c.Assert(pi.Size(), Equals, int64(3))
 	v, getok := pi.Get("/foo")
-	equals(t, getok, true)
-	equals(t, v, int64(2))
+	c.Assert(getok, Equals, true)
+	c.Assert(v, Equals, int64(2))
 	v, getok = pi.Get("/foo/bar.txt")
-	equals(t, getok, true)
-	equals(t, v, int64(33))
+	c.Assert(getok, Equals, true)
+	c.Assert(v, Equals, int64(33))
 }

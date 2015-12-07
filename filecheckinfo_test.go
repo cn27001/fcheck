@@ -1,38 +1,45 @@
 package fcheck
 
 import (
+	"bytes"
 	"os"
 	"testing"
 	"time"
+
+	. "gopkg.in/check.v1"
 )
 
-func TestBasicFileCheckInfo(t *testing.T) {
+func Test(t *testing.T) { TestingT(t) }
+
+type FileCheckInfoSuite struct{}
+
+var _ = Suite(&FileCheckInfoSuite{})
+
+func (s *FileCheckInfoSuite) TestBasicFileCheckInfo(c *C) {
 	now := time.Now()
 	fc := FileCheckInfo{
-		Path:    "/bin/smas/x/p/skot/perhaps/ls",
+		Path:    "/made/up",
 		Size:    13,
 		Mode:    os.ModeDevice,
 		ModTime: now,
 		Digest:  []byte("somesuch"),
 	}
 	data, err := fc.MarshalBinary()
-	ok(t, err)
+	c.Assert(err, IsNil)
 	rfc := FileCheckInfo{}
 	err = rfc.UnmarshalBinary(data)
-	ok(t, err)
-	equals(t, fc.Path, rfc.Path)
-	equals(t, fc.Size, rfc.Size)
-	assert(t, rfc.Size == 13, "expected 13 for size")
-	assert(t, rfc.Mode&os.ModeDevice == os.ModeDevice, "expected os.ModeDevice on file")
-	equals(t, now, rfc.ModTime)
-	assert(t, rfc.ModTime.Equal(time.Now()) || rfc.ModTime.Before(time.Now()), "expected mod time to be less or equal than time now")
-	assert(t, rfc.ModTime.After(time.Now().Add(-1*time.Hour)), "expected mod time after one hour ago")
-	equals(t, []byte("somesuch"), rfc.Digest)
+	c.Assert(err, IsNil)
+	c.Assert(rfc.Path, Equals, fc.Path)
+	c.Assert(rfc.Size, Equals, fc.Size)
+	c.Assert(rfc.Size, Equals, int64(13))
+	c.Assert(rfc.Mode&os.ModeDevice, Equals, os.ModeDevice)
+	c.Assert(rfc.ModTime, Equals, now)
+	c.Assert(bytes.Equal(rfc.Digest, fc.Digest), Equals, true)
 }
 
-func TestMatching(t *testing.T) {
+func (s *FileCheckInfoSuite) TestMatching(c *C) {
 	fi, err := os.Lstat("/bin/ls")
-	ok(t, err)
+	c.Assert(err, IsNil)
 	fc := FileCheckInfo{
 		Path:    "/bin/ls",
 		Size:    fi.Size(),
@@ -45,32 +52,33 @@ func TestMatching(t *testing.T) {
 		Mode:    fi.Mode(),
 		ModTime: fi.ModTime(),
 	}
-	assert(t, fc.Match(&fc2), "expected matching of FileCheckInfos")
+	c.Assert(fc.Match(&fc2), Equals, true)
 	fc.Digest = []byte("boo")
-	assert(t, fc.Match(&fc2) == false, "expected non matching of FileCheckInfos")
+	c.Assert(fc.Match(&fc2), Equals, false)
 	fc.CalcDigest()
 	fc2.CalcDigest()
-	assert(t, len(fc2.HexDigest()) > 10, "expected hexdigest to be more then 10 hex chars")
-	assert(t, fc.Match(&fc2), "expected matching of FileCheckInfos")
+	c.Assert(len(fc2.HexDigest()) > 10, Equals, true) // "expected hexdigest to be more then 10 hex chars")
+	c.Assert(fc.Match(&fc2), Equals, true)            // "expected matching of FileCheckInfos")
 	fc2.Size = 1
-	assert(t, fc.Match(&fc2) == false, "expected non matching of FileCheckInfos")
+	c.Assert(fc.Match(&fc2), Equals, false) //, "expected non matching of FileCheckInfos")
 	fc2.Size = fc.Size
-	assert(t, fc.Match(&fc2), "expected matching of FileCheckInfos")
+	c.Assert(fc.Match(&fc2), Equals, true) // "expected matching of FileCheckInfos")
 	fc.Mode = fc.Mode | os.ModeDevice
-	assert(t, fc.Match(&fc2) == false, "expected non matching of FileCheckInfos")
+	c.Assert(fc.Match(&fc2), Equals, false)
 	fc.Mode = fc2.Mode
-	assert(t, fc.Match(&fc2), "expected matching of FileCheckInfos")
+	c.Assert(fc.Match(&fc2), Equals, true)
 	fc.ModTime = time.Now()
-	assert(t, fc.Match(&fc2) == false, "expected non matching of FileCheckInfos")
+	c.Assert(fc.Match(&fc2), Equals, false)
 	fc.ModTime = fc2.ModTime
-	assert(t, fc.Match(&fc2), "expected matching of FileCheckInfos")
+	c.Assert(fc.Match(&fc2), Equals, true)
 	//if not regular file size does not matter
 	fc.Mode = fc.Mode | os.ModeDevice
 	fc2.Mode = fc.Mode
 	fc.Size = 2
-	assert(t, fc.Match(&fc2), "expected matching of FileCheckInfos")
+	c.Assert(fc.Match(&fc2), Equals, true)
 	fc.Size = fc2.Size
+	c.Assert(fc.Match(&fc2), Equals, true)
 	//if not regular file digest does not matter
 	fc.Digest = []byte("boo")
-	assert(t, fc.Match(&fc2), "expected matching of FileCheckInfos")
+	c.Assert(fc.Match(&fc2), Equals, true)
 }
