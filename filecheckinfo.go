@@ -80,7 +80,10 @@ func (fc *FileCheckInfo) MarshalBinary() ([]byte, error) {
 }
 
 //UnmarshalBinary emplements encoding/binary Unmarshaller
-func (fc *FileCheckInfo) UnmarshalBinary(data []byte) error {
+func (fc *FileCheckInfo) UnmarshalBinary(datain []byte) error {
+	//first copy incoming data since we will be retaining parts of it
+	data := make([]byte, len(datain))
+	copy(data, datain)
 	var blen uint16
 	var pos, nextpos int
 	var rawmode uint32
@@ -112,7 +115,7 @@ func (fc *FileCheckInfo) UnmarshalBinary(data []byte) error {
 	br.Read(byr, &blen)
 	pos = pos + 2 // two bytes read for unit16
 	nextpos = pos + int(blen)
-	fc.Digest = br.Slice(data, pos, nextpos) // TODO do i need to copy?
+	fc.Digest = br.Slice(data, pos, nextpos)
 	return br.Err()
 }
 

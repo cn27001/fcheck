@@ -14,7 +14,7 @@ import (
 
 const (
 	dbfile  = "fcheck.db"
-	version = "0.2 (Nov 2015)"
+	version = "0.3 (Dec 2015)"
 )
 
 func main() {

@@ -26,7 +26,7 @@ func (s *FileCheckInfoSuite) TestBasicFileCheckInfo(c *C) {
 	}
 	data, err := fc.MarshalBinary()
 	c.Assert(err, IsNil)
-	rfc := FileCheckInfo{}
+	rfc := &FileCheckInfo{}
 	err = rfc.UnmarshalBinary(data)
 	c.Assert(err, IsNil)
 	c.Assert(rfc.Path, Equals, fc.Path)

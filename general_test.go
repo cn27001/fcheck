@@ -3,34 +3,40 @@ package fcheck
 import (
 	"bufio"
 	"bytes"
+	"os"
 	"strings"
 	"sync"
 
 	. "gopkg.in/check.v1"
 )
 
-var (
-	testDBName string = "fcheck_test.db"
-	testPath   string = "/bin"
-)
+type TestSuite struct {
+	testDBName string
+	testPath   string
+}
 
-type TestSuite struct{}
+var _ = Suite(&TestSuite{
+	testDBName: "fcheck_test.db",
+	testPath:   "/bin"})
 
-var _ = Suite(&TestSuite{})
+//TearDownTest is called after each test completes
+func (s *TestSuite) TearDownSuite(c *C) {
+	os.Remove(s.testDBName)
+}
 
-func (s *TestSuite) TestGenerator(c *C) {
-	var g Walker = NewGenerator(testDBName, 2, false)
+func (s *TestSuite) Test1Generator(c *C) {
+	var g Walker = NewGenerator(s.testDBName, 2, false)
 	exclude := make(StringSet)
 	err := g.Start()
 	c.Assert(err, IsNil)
-	err = g.StartWalking(testPath, exclude)
+	err = g.StartWalking(s.testPath, exclude)
 	c.Assert(err, IsNil)
 	err = g.Stop()
 	c.Assert(err, IsNil)
 }
 
-func (s *TestSuite) TestPrinter(c *C) {
-	var p Walker = NewPrinter(testDBName)
+func (s *TestSuite) Test2Printer(c *C) {
+	var p Walker = NewPrinter(s.testDBName)
 	exclude := make(StringSet)
 	exclude.Add("/bin/ps")
 	var buf bytes.Buffer
@@ -38,7 +44,7 @@ func (s *TestSuite) TestPrinter(c *C) {
 	c.Assert(err, IsNil)
 	rawp := p.(*Printer)
 	rawp.console = &buf
-	err = p.StartWalking(testPath, exclude)
+	err = p.StartWalking(s.testPath, exclude)
 	c.Assert(err, IsNil)
 	err = p.Stop()
 	c.Assert(err, IsNil)
@@ -58,15 +64,15 @@ func (s *TestSuite) TestPrinter(c *C) {
 	c.Assert(foundPS, Equals, false) //"expected to NOT found /bin/ps")
 }
 
-func (s *TestSuite) TestComparator(c *C) {
-	var cm Walker = NewComparator(testDBName, 2, false)
+func (s *TestSuite) Test3Comparator(c *C) {
+	var cm Walker = NewComparator(s.testDBName, 2, false)
 	rawcm := cm.(*Comparator)
 	var buf bytes.Buffer
 	rawcm.console = &buf
 	exclude := make(StringSet)
 	err := cm.Start()
 	c.Assert(err, IsNil)
-	err = cm.StartWalking(testPath, exclude)
+	err = cm.StartWalking(s.testPath, exclude)
 	c.Assert(err, IsNil)
 	err = cm.Stop()
 	c.Assert(err, IsNil)
@@ -75,8 +81,8 @@ func (s *TestSuite) TestComparator(c *C) {
 	c.Assert(rawcm.removedFiles, HasLen, 0)
 }
 
-func (s *TestSuite) TestComparatorNoPath(c *C) {
-	var cm Walker = NewComparator(testDBName, 2, false)
+func (s *TestSuite) Test4ComparatorNoPath(c *C) {
+	var cm Walker = NewComparator(s.testDBName, 2, false)
 	rawcm := cm.(*Comparator)
 	var buf bytes.Buffer
 	rawcm.console = &buf
@@ -93,8 +99,8 @@ func (s *TestSuite) TestComparatorNoPath(c *C) {
 	c.Assert(rawcm.removedFiles, HasLen, 0)
 }
 
-func (s *TestSuite) TestComparatorNoPathInDB(c *C) {
-	var cm Walker = NewComparator(testDBName, 2, false)
+func (s *TestSuite) Test5ComparatorNoPathInDB(c *C) {
+	var cm Walker = NewComparator(s.testDBName, 2, false)
 	rawcm := cm.(*Comparator)
 	var buf bytes.Buffer
 	rawcm.console = &buf
@@ -111,8 +117,8 @@ func (s *TestSuite) TestComparatorNoPathInDB(c *C) {
 	c.Assert(rawcm.removedFiles, HasLen, 0)
 }
 
-func (s *TestSuite) TestPrinterNoPath(c *C) {
-	var cm Walker = NewPrinter(testDBName)
+func (s *TestSuite) Test6PrinterNoPath(c *C) {
+	var cm Walker = NewPrinter(s.testDBName)
 	exclude := make(StringSet)
 	rawcm := cm.(*Printer)
 	var buf bytes.Buffer
@@ -126,9 +132,11 @@ func (s *TestSuite) TestPrinterNoPath(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *TestSuite) TestGet(c *C) {
-	d := NewDBReader(testDBName)
+func (s *TestSuite) Test7Get(c *C) {
+	d := NewDBReader(s.testDBName)
 	err := d.Start()
+	c.Assert(err, IsNil)
+	err = d.GenerateIndex()
 	c.Assert(err, IsNil)
 	fi, err := d.Get("/skart/12412415145464634633463464")
 	c.Assert(err, NotNil)

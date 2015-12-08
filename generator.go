@@ -41,9 +41,8 @@ func (g *Generator) Walk(path string, info os.FileInfo, err error) error {
 			//path is excluded
 			if info.IsDir() {
 				return filepath.SkipDir
-			} else {
-				return nil
 			}
+			return nil
 		}
 	}
 	if err != nil {

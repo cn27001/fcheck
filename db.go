@@ -13,16 +13,12 @@ import (
 	"sync"
 )
 
-//BufferSize default size of I/O buffers
-const BufferSize = 512 * 1024
-
 //DBWriter represents the underlying datastore that stores the actual filesystem entries
 type DBWriter struct {
 	dbfile   string
 	wChan    chan *FileCheckInfo
 	quitChan chan bool
-	fout     PositionalWriteCloser
-	index    *PathIndex
+	fout     io.WriteCloser
 }
 
 //NewDBWriter returns new instance of DBWriter
@@ -41,7 +37,6 @@ func (r *DBWriter) Start() error {
 	r.quitChan = make(chan bool)
 	r.fout = f
 	go r.writer()
-	r.index = NewPathIndex()
 	return nil
 }
 
@@ -52,14 +47,9 @@ func (r *DBWriter) Stop() error {
 		r.quitChan <- true
 	}
 	if r.fout != nil {
-		r.fout.Close() //ignore error
+		return r.fout.Close()
 	}
-	f, err := os.Create(r.dbfile + ".index")
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return r.index.Save(f)
+	return nil
 }
 
 //Put puts an entry in the datastore
@@ -72,11 +62,6 @@ func (r *DBWriter) writer() {
 	for {
 		select {
 		case fc := <-r.wChan:
-			curPos, err := r.fout.Seek(0, os.SEEK_CUR)
-			if err != nil {
-				log.Fatal(err)
-			}
-			r.index.Set(fc.Path, curPos)
 			if err := encode(r.fout, fc); err != nil {
 				log.Print("trouble writing to db file: ", err.Error())
 			}
@@ -96,31 +81,46 @@ func encode(out io.Writer, m encoding.BinaryMarshaler) error {
 	if err != nil {
 		return err
 	}
-	_, err = out.Write(data)
+	written := 0
+	for err == nil && written < len(data) {
+		if written > 0 {
+			log.Print("More than one write needed to finish! This should never happen.")
+		}
+		var num int
+		num, err = out.Write(data[written:])
+		written += num
+	}
 	return err
 }
 
 func decode(in io.Reader, m encoding.BinaryUnmarshaler) error {
-	var blen uint16
-	err := binary.Read(in, binary.LittleEndian, &blen)
+	var bytesToRead uint16
+	err := binary.Read(in, binary.LittleEndian, &bytesToRead)
 	if err != nil {
 		return err
 	}
-	buf := make([]byte, blen)
-	if n, err := in.Read(buf); n != len(buf) {
-		if err != nil {
-			return err
-		}
-		return fmt.Errorf("Expected to read %d bytes but read %d", blen, n)
+	buffer := make([]byte, bytesToRead)
+	bytesRead := 0
+	for err == nil && bytesRead < int(bytesToRead) {
+		var lenBytes int
+		buf := buffer[bytesRead:]
+		lenBytes, err = in.Read(buf)
+		bytesRead += lenBytes
 	}
-	return m.UnmarshalBinary(buf)
+	if err != nil && err != io.EOF {
+		return err
+	}
+	if bytesRead < int(bytesToRead) {
+		return fmt.Errorf("Expected to read %d bytes but read %d, err is %v read so far %v", bytesToRead, bytesRead, err, buffer[0:bytesRead])
+	}
+	return m.UnmarshalBinary(buffer)
 }
 
 //DBReader is a simple implementation of FileInfoReader
 type DBReader struct {
 	dbfile string
 	index  *PathIndex
-	db     PositionalReadCloser
+	db     *os.File
 	l      sync.Mutex
 }
 
@@ -139,14 +139,38 @@ func (r *DBReader) Start() error {
 		return err
 	}
 	r.db = rs
-	f, err := os.Open(r.dbfile + ".index")
+	return nil
+}
+
+//GenerateIndex will generate in memory index for faster record seeks from DB file
+func (r *DBReader) GenerateIndex() error {
+	log.Println("Generating Index")
+	idx := NewPathIndex()
+	fi, err := os.Open(r.dbfile)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	r.index = NewPathIndex()
-	err = r.index.Load(f)
-	return err
+	defer fi.Close()
+	bif := bufio.NewReader(fi)
+	in := NewPositionReader(bif)
+	var (
+		pos int64
+		fc  FileCheckInfo
+	)
+	for {
+		pos = in.Position()
+		if err = decode(in, &fc); err != nil {
+			if err != io.EOF {
+				log.Printf("trouble in decode: %s\n", err.Error())
+				return err
+			}
+			break
+		}
+		idx.Set(fc.Path, pos)
+	}
+	r.index = idx
+	log.Println("Done generating Index")
+	return nil
 }
 
 //Stop performs any needed cleanup
@@ -185,12 +209,12 @@ func (r *DBReader) Map(path string, f DBMapFunc) error {
 		return err
 	}
 	defer fi.Close()
-	bif := bufio.NewReaderSize(fi, BufferSize)
+	bif := bufio.NewReader(fi)
 	for {
 		var fc FileCheckInfo
 		if err = decode(bif, &fc); err != nil {
 			if err != io.EOF {
-				log.Print("trouble calling decode:", err)
+				log.Printf("trouble calling decode for %s: %s\n", path, err.Error())
 				return err
 			}
 			break
@@ -201,4 +225,28 @@ func (r *DBReader) Map(path string, f DBMapFunc) error {
 		f(&fc)
 	}
 	return nil
+}
+
+//PositionReader keeps track of how many bytes it has read so far
+type PositionReader struct {
+	r   io.Reader
+	pos int64
+}
+
+//NewPositionReader returns new reader using r as the source reader
+func NewPositionReader(r io.Reader) *PositionReader {
+	return &PositionReader{
+		r: r}
+}
+
+//Position returns how many bytes were read so far
+func (pr *PositionReader) Position() int64 {
+	return pr.pos
+}
+
+//Read implements io.Reader
+func (pr *PositionReader) Read(buf []byte) (int, error) {
+	bl, err := pr.r.Read(buf)
+	pr.pos += int64(bl)
+	return bl, err
 }

@@ -74,7 +74,10 @@ func (rcv *Comparator) Start() error {
 			}
 		}(i)
 	}
-	return rcv.FileInfoReader.Start()
+	if err := rcv.FileInfoReader.Start(); err != nil {
+		return err
+	}
+	return rcv.FileInfoReader.GenerateIndex()
 }
 
 //StartWalking will start the actual filesystem walking and comparison with DB
@@ -102,7 +105,6 @@ func (rcv *Comparator) Walk(path string, info os.FileInfo, err error) error {
 		Path: path,
 	}
 	if err != nil {
-		log.Print(err)
 		if os.IsNotExist(err) {
 			return nil
 		}
@@ -167,7 +169,6 @@ func (rcv *Comparator) Stop() error {
 	})
 	if maperror != nil {
 		log.Printf("Error in Map: %s", maperror.Error())
-		return maperror
 	}
 	//Print the report
 	fmt.Fprintf(rcv.console, "\n\nChanged files %d\n\n", len(rcv.changedFiles))

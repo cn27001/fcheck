@@ -2,3 +2,5 @@
 cmd/fcheck/fcheck*
 cmd/fcount/fcount
 cmd/fcheck/fcheck.db
+cmd/fcheck/excludes.txt
+coverage.prof

@@ -1,7 +1,5 @@
 package fcheck
 
-import "io"
-
 //StringSet represents a simple set of strings
 type StringSet map[string]int8
 
@@ -53,19 +51,8 @@ type FileInfoReader interface {
 	StartStopper
 	Get(path string) (*FileCheckInfo, error)
 	Map(path string, callback DBMapFunc) error
+	GenerateIndex() error
 }
 
 //DBMapFunc is the callback function definition used by Map
 type DBMapFunc func(value *FileCheckInfo) error
-
-//PositionalWriteCloser is minimum subset of io interfaces used by the DB code
-type PositionalWriteCloser interface {
-	io.WriteCloser
-	io.Seeker
-}
-
-//PositionalReadCloser is minimum subset of io interfaces used by the DB code
-type PositionalReadCloser interface {
-	io.ReadCloser
-	io.Seeker
-}
